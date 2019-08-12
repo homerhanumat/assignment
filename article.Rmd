@@ -1,0 +1,642 @@
+---
+title: "Sentence-Matching in the Bluegrass Corpus: Methodological Considerations"
+description: |
+  Describes the procedure for generating optimal matchings of sentences within pairs of speakers in the Bluegrass Corpus.
+author:
+  - name: Homer White 
+    url: https://github.com/homerhanumat
+    affiliation: Georgetown College (KY)
+    affiliation_url: https://www.georgetowncollege.edu
+date: "`r Sys.Date()`"
+output: 
+  distill::distill_article:
+    toc: true
+    toc_depth: 3
+bibliography: biblio.bib
+---
+
+
+```{r setup, include = FALSE}
+library(tidyverse)
+knitr::opts_chunk$set(echo = TRUE)
+
+########################################################
+## run some code early to set up illustrative examples:
+########################################################
+
+load("data/sentences.Rda")
+
+profile_diff <- function(x, y, trim) {
+  test <- DescTools::YuenTTest(x, y, trim = trim, paired = TRUE)
+  list(
+    statistic = abs(test$statistic),
+    p_value = test$p.value
+  )
+}
+
+make_diff_matrix <- function(pair, trim) {
+  a <- pair %>% 
+    filter(speaker_id == "Foreign") %>% 
+    select(ends_with("rating")) %>% 
+    t() %>% 
+    as.matrix()
+  b <- pair %>% 
+    filter(speaker_id == "Native") %>% 
+    select(ends_with("rating")) %>% 
+    t() %>% 
+    as.matrix()
+  mat_statistics <- matrix(0, nrow = ncol(a), ncol = ncol(b))
+  mat_pvals <- matrix(0, nrow = ncol(a), ncol = ncol(b))
+  for (i in 1:ncol(a)) {
+    for (j in 1:ncol(b)) {
+      result <- profile_diff(x = a[, i], y = b[, j], trim = trim)
+      mat_statistics[i, j] <- result$statistic
+      mat_pvals[i, j] <- result$p_value
+    }
+  }
+  rownames(mat_statistics) <- pair %>% 
+    filter(speaker_id == "Foreign") %>%
+    pull(sentence_id)
+  colnames(mat_statistics) <- pair %>% 
+    filter(speaker_id == "Native") %>%
+    pull(sentence_id)
+  rownames(mat_pvals) <- pair %>% 
+    filter(speaker_id == "Foreign") %>%
+    pull(sentence_id)
+  colnames(mat_pvals) <- pair %>% 
+    filter(speaker_id == "Native") %>%
+    pull(sentence_id)
+  list(
+    mat_statistics = mat_statistics,
+    mat_pvals = mat_pvals
+  )
+}
+
+pair <-
+  sentences %>% 
+  filter(pair_id == 1)
+
+demo_matrix <-
+  pair %>% 
+  make_diff_matrix(trim = 0) %>% 
+  .$mat_statistics %>% 
+  round(digits = 3)
+
+get_best_demo <- function(pair, size, select, trim, demo) {
+  
+  ## get sentence ids for each speaker:
+  a_sentence_ids <- pair %>% 
+    filter(speaker_id == "Foreign") %>% 
+    pull(sentence_id)
+  b_sentence_ids <- pair %>% 
+    filter(speaker_id == "Native") %>% 
+    pull(sentence_id)
+  
+  ## compute matrices of difference-statisitics and p-values,
+  ## for each pair of sentences
+  diff_mats <- make_diff_matrix(pair, trim = trim)
+  
+  ## make all possible subsets of cardinality select from
+  ## the sentences for A-speker
+  a_subsets_numeric <- utils::combn(x = size, m = select)
+  
+  ## prepare to loop through all A-speaker subsets
+  n <- ncol(a_subsets_numeric)
+  if (demo) n <- 1
+  a_best <- ""
+  b_best <- ""
+  statistic <- 0
+  pval <- 0
+  diff_best <- Inf
+  
+  ## begin looping
+  for (i in 1:n) {
+    
+    ## extract sentence ids from the numbers:
+    subset_a <- a_sentence_ids[a_subsets_numeric[, i]]
+    
+    ## extract the relvant portion of the difference matrices
+    dms <- diff_mats$mat_statistics[subset_a, ]
+    
+    ## Now comes the Hungarian Algorithm ...
+    solution <- clue::solve_LSAP(x = dms, maximum = FALSE)
+    
+    ## extract B-speaker sentence-ids from the solution
+    subset_b <- b_sentence_ids[solution]
+    
+    ## get staitics and p-values for each pair in the
+    ## best matching
+    sentence_pair_statistics <- numeric(select)
+    sentence_pair_pvals <- numeric(select)
+    for (i in 1:select) {
+      a_location <- subset_a[i]
+      b_location <- subset_b[i]
+      sentence_pair_statistics[i] <- diff_mats$mat_statistics[a_location, b_location]
+      sentence_pair_pvals[i] <- diff_mats$mat_pvals[a_location, b_location]
+    }
+    
+    ## check to see if this best match is better than a best-match
+    ## froma previously-analysed A-subsets:
+    sum_statistics <- sum(sentence_pair_statistics)
+    if (sum_statistics < diff_best) {
+      diff_best <- sum_statistics
+      a_best <- subset_a
+      b_best <- subset_b
+      statistic <- sentence_pair_statistics
+      pval <- sentence_pair_pvals
+    }
+  }
+  
+  ## return data frame of results for the best possible matching;
+  data.frame(
+    foreign = a_best,
+    native = b_best,
+    statistic = statistic,
+    pval = pval)
+}
+
+df <- get_best_demo(pair, size = 12, select = 8, trim = 0, demo = FALSE)
+dm2 <- matrix("", nrow = 12, ncol = 12)
+rownames(dm2) <- rownames(demo_matrix)
+colnames(dm2) <- colnames(demo_matrix)
+check <-as.matrix(df[, 1:2])
+for (i in 1:12) {
+  for (j in 1:12) {
+    name_pair <- c(rownames(demo_matrix)[i], colnames(demo_matrix)[j])
+    show <- FALSE
+    for (m in 1:8) {
+      if (all(name_pair == check[m, ])) {
+        show <- TRUE
+      }
+      
+    }
+    dm2[i, j] <-
+      ifelse(
+        show,
+        as.character(demo_matrix[i, j]),
+        ""
+      )
+  }
+}
+```
+
+## Introduction
+
+The Bluegrass Corpus includes a set of 40 pairs of TED-talk speakers who are similar in many respects but who differ in whether or not their accent is deemed "foreign" or "native". Each speaker has eight video clips in which he or she is speaking a sentence.  All sixteen sentences associated with a particular pair of speakers were rated for difficulty by ten participants. The two sets of eight sentences are matched one-to-one, resulting in eight pairs of sentences.  The matching has been done in such as way as to make the mean rated difficulty of the sentences in each pair as similar as possible.  In keeping with the ideals of reproducible research, the aim of this technical report is to describe the matching procedure in such a way that other researchers can assess the quality of the procedure and use the procedure to reproduce the matching.
+
+The procedure is implemented in the R programming language @R2019.  There are two ways for R-users to reproduce the matching:
+
+1. Those who are familiar with `git` may download or clone the author's project repository [https://github.com/homerhanumat/assignment](https://github.com/homerhanumat/assignment) on Github.  In the root directory of the project, find the R Markdown source file for the article and knit it.
+2. Alternatively a user may copy the displayed code into an R-script and run it.
+
+## Preliminaries
+
+In order to use the matching algorithm, make sure you have installed some packages from CRAN:
+
+```{r eval = FALSE}
+install.packages(
+  c(
+    "readxl",       ## for data import
+    "clue",         ## implement the Hungarian Algorithm
+    "DescTools",    ## Yuen's trimmed t-test
+    "tidyverse"     ## packages for data wrangling and graphics
+    )
+  )
+```
+
+You will want to attach the **tidyverse** packages:
+
+```{r, eval = FALSE}
+library(tidyverse)
+```
+
+## Data Import and Munging
+
+First we download the data.  This can be done manually from the Open Science Framework [https://osf.io/fd4uj/download](https://osf.io/fd4uj/download), or in R-code from the author's Github repository:
+
+```{r eval = FALSE}
+## make a directory to store data:
+if (!dir.exists("data")) {
+  dir.create("data")
+}
+## If possible, change to OSF URL:
+download.file(
+  url = "https://github.com/homerhanumat/assignment/raw/master/data/Experiment3.xlsx",
+  destfile = "data/Experiment3.xlsx"
+)
+```
+
+(Note that the data resides in a folder named `data`.)
+
+Then we read the data into our R session:
+
+
+```{r eval = FALSE}
+sentences1 <- readxl::read_excel("data/Experiment3.xlsx")
+```
+
+Some data-munging:
+
+```{r eval = FALSE}
+sentences <-
+  sentences1 %>% 
+  ## pair-id came in as charcter vector, so change to integers:
+  mutate(Pair = as.integer(Pair)) %>% 
+  ## ditch mst of the columns:
+  select(Participant, Pair, Sentence, Accent, Condition, Rating) %>% 
+  ## rename most of the variables:
+  rename(participant_id = Participant,
+         pair_id = Pair,
+         sentence_id = Sentence,
+         speaker_id = Accent,
+         difficulty = Condition,
+         rating = Rating) %>% 
+  ## change rating scale from [-1, 1] to [100, 100]
+  mutate(rating = rating * 100) %>% 
+  ## reshape data so that each repreents a single sentence:
+  arrange(sentence_id) %>% 
+  mutate(participant = rep(1:10, times = 960)) %>% 
+  select(-participant_id) %>% 
+  spread(key = participant, value = rating, sep = "_rating_")
+
+## give better names to the columns containing particpant ratings:
+names(sentences)[5:14] <- paste("participant", 1:10, "rating", sep = "_")
+
+## rearrange for easier viewing
+sentences <-
+  sentences %>% 
+  arrange(pair_id)
+```
+
+
+
+Here is the transformed data:
+
+```{r echo = FALSE, layout="l-body-outset"}
+rmarkdown::paged_table(sentences)
+```
+
+
+## Sentence-Matching
+
+### The Idea of the Routine
+
+For each speaker-pair, we wish to desire to find a set of eight sentences from the Foreign speaker and to match them one-to-one with the members of a set of eight sentences from the Native speaker, in such a way that the resulting matched sentences are as similar as possible in terms of their difficulty-ratings as given by the ten subjects who heard the sentences of both speakers.
+
+As a criterion for similarity of difficulty of two given sentences, we use the absolute value of the t-statistic in a paired t-test involving the ten ratings for each sentence.  As a measure of overall similarity in a proposed matching, we use the sum of the eight absolute values.  The smaller this sum, the more "similar" we deem the matching to be.
+
+To get a better idea of what we are attempting, consider the following matrix, which pertains to the pair of speakers with ID-number 1:
+
+```{r echo = FALSE, layout = "l-body-outset"}
+knitr::kable(demo_matrix)
+```
+
+The row-names of the above matrix are sentence-IDs for the Foreign speaker; the column names are IDs of the sentences spoken by the Native speaker.  Each cell is the absolute value of the paired t-test applied to a sentence-pair.  Thus, for example, in a paired t-test for sentences `r rownames(demo_matrix)[1]` and  `r colnames(demo_matrix)[1]` the absolute value of the t-test statistic was about `r demo_matrix[1, 1]`.
+
+Our task is find a set of eight rows and a set of eight columns and a matching between them so as to make the sum of the corresponding eight cells as small as possible.
+
+For the matrix above, the best choice turns out to be as follows:
+
+```{r echo = FALSE, layout = "l-body-outset"}
+knitr::kable(dm2)
+```
+
+In other words, the best matching is:
+
+```{r echo = FALSE}
+knitr::kable(df[, 1:2])
+```
+
+But there are about 9.9 billion matchings to compare!  Trying them all one-by-one one takes much too long on most personal computers.
+
+It turns out that problem is an instance of the well-known [Assignment Problem](https://en.wikipedia.org/wiki/Assignment_problem) in applied combinatorics, and several efficient solutions are available.  We choose to use the Hungarian Algorithm, as implemented in R-package [**clue**](https://cran.r-project.org/web/packages/clue/clue.pdf), authored by Kurt Hornik.
+
+<aside>
+For a mathematical treatment of the Hungarian Algorithm, see, e.g., @papa1982. The interested non-mathematical reader will find an accessible description of the Hungarian Algorithm at the following URL: [http://www.math.harvard.edu/archive/20_spring_05/handouts/assignment_overheads.pdf](http://www.math.harvard.edu/archive/20_spring_05/handouts/assignment_overheads.pdf)
+</aside>
+
+In order to apply the Hungarian Algorithm we must begin with matrix in which each row-item is matched with a column item, so we cannot work directly with the original 12-by-12 matrix:  we need an 8-by-12 matrix instead.  Therefore we create, for each possible set of eight sentences from the 12 sentences of the Foreign speaker, a matrix in which the rows are the members of the set.  One such matrix is as follows:
+
+```{r echo = FALSE, layout = "l-body-outset"}
+knitr::kable(demo_matrix[1:8, ])
+```
+
+(This matrix corresponds to choosing the first eight sentences from the Foreign speaker.)  We apply the Hungarian Algorithm to the matrix, arriving at the following result:
+
+
+```{r echo = FALSE}
+first_eight <- get_best_demo(pair, size = 12, select = 8, trim = 0, demo = TRUE)
+knitr::kable(first_eight[, 1:3])
+```
+
+Of course we must apply the Hungarian algorithm for *every possible* set of eight sentences from the Foreign speaker.  That's a total of 495 sets, but the Hungarian algorithm is so efficient that the whole process runs very quickly on a personal computer, as we shall soon see.  We retain the set whose best matching to the Native speaker has the highest possible similarity, i.e., the smallest sum of absolute values of t-statistics, arriving at the solution we showed earlier.
+
+We also need to repeat the process for all forty pairs of speakers.
+
+### The Code
+
+
+```{r}
+## Utility function to measure the difference in difficulty ratings.
+## Use the Yuen t-test that allows for working with trimmed means.
+## Returns the test-statistic and the P-value.
+profile_diff <- function(x, y, trim) {
+  test <- DescTools::YuenTTest(x, y, trim = trim, paired = TRUE)
+  list(
+    statistic = abs(test$statistic),
+    p_value = test$p.value
+  )
+}
+
+## Utility function to make matrices of statistics and P-values
+## for all pairs of sentences:  one from Speaker A, the other
+## from speaker B.
+make_diff_matrix <- function(pair, trim) {
+  a <- pair %>% 
+    filter(speaker_id == "Foreign") %>% 
+    select(ends_with("rating")) %>% 
+    t() %>% 
+    as.matrix()
+  b <- pair %>% 
+    filter(speaker_id == "Native") %>% 
+    select(ends_with("rating")) %>% 
+    t() %>% 
+    as.matrix()
+  mat_statistics <- matrix(0, nrow = ncol(a), ncol = ncol(b))
+  mat_pvals <- matrix(0, nrow = ncol(a), ncol = ncol(b))
+  for (i in 1:ncol(a)) {
+    for (j in 1:ncol(b)) {
+      result <- profile_diff(x = a[, i], y = b[, j], trim = trim)
+      mat_statistics[i, j] <- result$statistic
+      mat_pvals[i, j] <- result$p_value
+    }
+  }
+  rownames(mat_statistics) <- pair %>% 
+    filter(speaker_id == "Foreign") %>%
+    pull(sentence_id)
+  colnames(mat_statistics) <- pair %>% 
+    filter(speaker_id == "Native") %>%
+    pull(sentence_id)
+  rownames(mat_pvals) <- pair %>% 
+    filter(speaker_id == "Foreign") %>%
+    pull(sentence_id)
+  colnames(mat_pvals) <- pair %>% 
+    filter(speaker_id == "Native") %>%
+    pull(sentence_id)
+  list(
+    mat_statistics = mat_statistics,
+    mat_pvals = mat_pvals
+  )
+}
+
+## Utility function.  Given a pair of speakers, find the best
+## matching of sentences.  Uses brute force to go through
+## all possible pairs of subsets of cardinality "select" from speaker A,
+## with each A-set using the Hungarian Algorithm
+## to find the best matching set of sentences from Speaker B.
+## Keeps track of the best matching.
+## Returns a data frame of results.
+get_best <- function(pair, size, select, trim) {
+  
+  ## get sentence ids for each speaker:
+  a_sentence_ids <- pair %>% 
+    filter(speaker_id == "Foreign") %>% 
+    pull(sentence_id)
+  b_sentence_ids <- pair %>% 
+    filter(speaker_id == "Native") %>% 
+    pull(sentence_id)
+  
+  ## compute matrices of difference-statisitics and p-values,
+  ## for each pair of sentences
+  diff_mats <- make_diff_matrix(pair, trim = trim)
+  
+  ## make all possible subsets of cardinality select from
+  ## the sentences for A-speker
+  a_subsets_numeric <- utils::combn(x = size, m = select)
+  
+  ## prepare to loop through all A-speaker subsets
+  n <- ncol(a_subsets_numeric)
+  a_best <- ""
+  b_best <- ""
+  statistic <- 0
+  pval <- 0
+  diff_best <- Inf
+  
+  ## begin looping
+  for (i in 1:n) {
+    
+    ## extract sentence ids from the numbers:
+    subset_a <- a_sentence_ids[a_subsets_numeric[, i]]
+    
+    ## extract the relvant portion of the difference matrices
+    dms <- diff_mats$mat_statistics[subset_a, ]
+    
+    ## Now comes the Hungarian Algorithm ...
+    solution <- clue::solve_LSAP(x = dms, maximum = FALSE)
+    
+    ## extract B-speaker sentence-ids from the solution
+    subset_b <- b_sentence_ids[solution]
+    
+    ## get staitics and p-values for each pair in the
+    ## best matching
+    sentence_pair_statistics <- numeric(select)
+    sentence_pair_pvals <- numeric(select)
+    for (i in 1:select) {
+      a_location <- subset_a[i]
+      b_location <- subset_b[i]
+      sentence_pair_statistics[i] <- diff_mats$mat_statistics[a_location, b_location]
+      sentence_pair_pvals[i] <- diff_mats$mat_pvals[a_location, b_location]
+    }
+    
+    ## check to see if this best match is better than a best-match
+    ## froma previously-analysed A-subsets:
+    sum_statistics <- sum(sentence_pair_statistics)
+    if (sum_statistics < diff_best) {
+      diff_best <- sum_statistics
+      a_best <- subset_a
+      b_best <- subset_b
+      statistic <- sentence_pair_statistics
+      pval <- sentence_pair_pvals
+    }
+  }
+  
+  ## return data frame of results for the best possible matching;
+  data.frame(
+    foreign = a_best,
+    native = b_best,
+    statistic = statistic,
+    pval = pval)
+}
+
+## match_sentences ----
+
+## This is the function you'll actually use.
+##
+## data  = the original data frame
+## size = number of sentences eer speaker
+## select = desired number of sentence-pairs
+##
+## trim permites researchers to omit very high or low
+## ratings from the analysis.  (Example:  setting trim = 0.1 would
+## eliminate the highest and the lowest of the ten differences in ratings.)
+##
+## Setting trace to TRUE results in a progress report to the console
+## (not needed for the current small study)
+##
+## Result is a list of data frames, one for each speaker-pair,
+## saying which sentence goes to which, and reporting the P-values
+## of the Yuen T-Test.  This allows the user to flag pairs where the
+## ratings are "too different".
+##
+match_sentences <- function(data, size, select, trim = 0, trace = FALSE) {
+  pair_ids <- sort(unique(data$pair_id))
+  pairs <- length(unique(data$pair_id))
+  lst <- vector(mode = "list", length = pairs)
+  for (i in 1:pairs) {
+    if (trace) {
+      cat("Working on speaker pair with id", pair_ids[i], "...\n")
+    }
+    pair <- data %>% 
+      filter(pair_id == pair_ids[i])
+    results <-  get_best(pair, size, select, trim)
+    lst[[i]] <- results
+  }
+  names(lst) <- pair_ids
+  lst
+}
+```
+
+## Implementation
+
+Now we run the algorithm, using `system.time() to record how long it takes:
+
+```{r cache = TRUE}
+system.time(
+  results <- match_sentences(
+    data = sentences,
+    size = 12,
+    select = 8,
+    trim = 0,  ## the default, actually,
+    trace = FALSE
+  )
+)
+```
+
+
+Thanks to the Hungarian Algorithm the routine finishes in a satisfyingly small amount of time.
+
+`results` is a list, each element of which is a data frame showing how to do the matching of sentences for a given pair of speakers.  We can view the matching for the speaker-pair with id 17 as follows:
+
+```{r eval = FALSE}
+results[["17"]]
+```
+
+
+```{r echo = FALSE}
+knitr::kable(results[["17"]])
+```
+
+Note that we have retained the P-values for each paired t-test.  We can use them as a check on the similarity of sentences.  If we find sentence pairs for which the P-values are very small then we may choose not to include them in the Corpus.
+
+## Post-Hoc Analysis
+
+### Verifying Sentence-Similarity
+
+Let's gather all of the P-values:
+
+```{r}
+pvals <- numeric()
+for (i in 1:length(results)) {
+  pvals <- c(pvals, results[[i]]$pval)
+}
+```
+
+The smallest P-value is:
+
+```{r}
+min(pvals)
+```
+
+
+Most of the P-values are quite high, as we see from the following density plot:
+
+```{r, fig.cap = "t-test P-values for all 320 sentence pairs"}
+ggplot(data = NULL, aes(x = pvals)) +
+  geom_density(fill = "burlywood") +
+  geom_rug() +
+  labs(x = "P-values")
+```
+
+
+It appears that the matching routine has succeeded in identifying sentence-pairs that are similar---at least with respect to mean difficulty!
+
+### Investigating Difficulty of Sentences
+
+```{r echo = FALSE}
+s2 <-
+  sentences %>% 
+  select(sentence_id, ends_with("rating")) %>% 
+  gather(key = "participant", value = "rating", ends_with("rating")) 
+
+selected_sentences <-
+  results %>% 
+  map(
+    .f = function(df) {
+      c(as.character(df$foreign), as.character(df$native))
+    }
+  ) %>% 
+  unlist()
+
+means_all <-
+  s2 %>% 
+  group_by(sentence_id) %>% 
+  summarize(mean_rating = mean(rating)) %>% 
+  mutate(selected = sentence_id %in% selected_sentences) %>% 
+  mutate(selected = ifelse(selected, "used in Corpus", "not used")) %>% 
+  inner_join(sentences %>%
+               select(sentence_id, speaker_id),
+             by = "sentence_id")
+```
+
+Here is density plot of all 9600 individual difficulty-ratings:
+
+```{r echo = FALSE, fig.cap = "Density plot of all 9600 difficulty-ratings recorded in the study."}
+s2 %>% 
+  ggplot(aes(x = rating)) +
+  geom_density(fill = "burlywood")
+```
+
+Next we see a violin plot of mean difficulty-ratings.  Each dot is a single sentence; its vertical height is the mean of the ratings for the ten participants who rated it.  We have separated the sentences into the 320 that were not selected as members of an optimal matching and the 640 setences that were selected.
+
+```{r echo = FALSE, fig.cap = "Violin plot of mean difficulty ratings, by status of sentence (selected for Corpus vs. not selected)."}
+means_all %>% 
+  ggplot(aes(x = selected, y = mean_rating)) +
+  geom_violin(fill = "burlywood") +
+  geom_jitter(width = 0.25, size = 0.3) +
+  labs(x = NULL, y = "mean rating")
+```
+
+
+The sentences that were not selected vary a bit more in mean difficulty than sentences that were selected.  This makes sense, for when a sentence is of unusually high or low difficulty there is less likelihood of finding---among the sentences of the other speaker in the speaker-pair---a sentence similar to it in difficulty.
+
+The following boxplot compare the mean difficulty-ratings of senteces spoken by foreign anf native speakers, including those sentences that were not selected as members of an optimal pairing:
+
+```{r echo = FALSE, fig.cap = "Boxplots of mean ratings for sentences by foreign and natives speakers."}
+means_all %>% 
+  ggplot(aes(x = speaker_id, y = mean_rating)) +
+  geom_boxplot(fill = "burlywood", outlier.shape = NA) +
+  geom_jitter(width = 0.25, size = 0.3) +
+  labs(x = "speaker accent", y = "mean rating")
+```
+
+There appears to be essentailly no difference in centers of the distributions; see also the following table:
+
+
+```{r echo = FALSE}
+means_all %>% 
+  group_by(speaker_id) %>% 
+  summarize(mean = mean(mean_rating), median = median(mean_rating), n = n()) %>% 
+  knitr::kable(caption = "Mean and median of mean ratings for sentences, by type of speaker.")
+```
+
+

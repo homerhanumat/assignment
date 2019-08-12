@@ -1,0 +1,144 @@
+---
+title: "Untitled"
+author: "Homer White"
+date: "8/12/2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+Fragment from an early exploration.
+
+### Investigating Range of Difficulty for Sentence-Pairs
+
+This section pertains to the question of how to classify sentence-pairs in the Corpus as difficult or easy.  Should difficulty be considered as relative to only the other seven sentence-pairs in the speaker-pair, or as relative to all sentence-pairs in the Corpus?
+
+```{r echo = FALSE}
+spread_measure <- function(numbers, lower = 100, upper = 100) {
+  numbers <- c(-100, sort(numbers), 100)
+  diffs <- numbers - dplyr::lag(numbers)
+  sum(diffs[-1]^2)
+}
+get_sm <- function(results) {
+  res_names <- names(results)
+  lst <- list()
+  min_diff <- Inf
+  max_diff <- -Inf
+  for (i in 1:length(res_names)) {
+    df <- results[[i]]
+    pair <- sentences %>% filter(pair_id == as.numeric(res_names[i]))
+    a <- pair %>% 
+      filter(speaker_id == "Foreign") %>% 
+      select(ends_with("rating")) %>% 
+      t() %>% 
+      as.matrix()
+    b <- pair %>% 
+      filter(speaker_id == "Native") %>% 
+      select(ends_with("rating")) %>% 
+      t() %>% 
+      as.matrix()
+    mean_diffs <- numeric(nrow(df))
+    for (row in 1:nrow(df)) {
+      x <- a[, df[row, "foreign"][1]]
+      y <- b[, df[row, "native"][1]]
+      mean_diffs[row] <- mean(c(x, y))
+    }
+    if (min(mean_diffs) < min_diff) min_diff <- min(mean_diffs)
+    if (max(mean_diffs) > max_diff) max_diff <- max(mean_diffs)
+  }
+  for (i in 1:length(res_names)) {
+    df <- results[[i]]
+    pair <- sentences %>% filter(pair_id == as.numeric(res_names[i]))
+    a <- pair %>% 
+      filter(speaker_id == "Foreign") %>% 
+      select(ends_with("rating")) %>% 
+      t() %>% 
+      as.matrix()
+    b <- pair %>% 
+      filter(speaker_id == "Native") %>% 
+      select(ends_with("rating")) %>% 
+      t() %>% 
+      as.matrix()
+    mean_diffs <- numeric(nrow(df))
+    for (row in 1:nrow(df)) {
+      x <- a[, df[row, "foreign"][1]]
+      y <- b[, df[row, "native"][1]]
+      mean_diffs[row] <- mean(c(x, y))
+    }
+    spread <- spread_measure(mean_diffs, lower = min_diff, upper = max_diff)
+    lst[[res_names[i]]] <- list(
+      mean_difficulty = sort(mean_diffs),
+      spread = spread
+    )
+  }
+  lst
+}
+
+spreads <- get_sm(results = results)
+
+get_extremes <- function(spreads, n = 10, tightest = TRUE) {
+  spread_numbers <-
+    spreads %>% 
+    purrr::map_dbl(.f = function(x) x$spread)
+  if (tightest) {
+    tail(spreads[order(spread_numbers)], n)
+  } else {
+    head(spreads[order(spread_numbers)], n)
+  }
+}
+
+
+make_rows <- function(lst, name) {
+  data.frame(
+    pair_id = as.numeric(name),
+    mean_difficulty = lst$mean_difficulty
+  )
+}
+
+tightest <- get_extremes(spreads, n = 10)
+loosest <- get_extremes(spreads, n = 10, tightest = FALSE)
+
+df_tight <-
+  list(tightest, names(tightest)[1:10]) %>%
+  purrr::pmap_dfr(make_rows) %>% 
+  mutate(class = "tightest") %>% 
+  mutate(class = as.character(class))
+
+df_loose <-
+  list(loosest, names(loosest)[1:10]) %>%
+  purrr::pmap_dfr(make_rows) %>% 
+  mutate(class = "loosest") %>% 
+  mutate(class = as.character(class))
+
+df_all <-
+  df_tight %>% 
+  bind_rows(df_loose) %>% 
+  mutate(pair_id = factor(pair_id, levels = sort(unique(pair_id))))
+```
+
+Consider the following plot:
+
+```{r, layout = "l-page", fig.width = 6, fig.height = 3, echo = FALSE}
+df_all %>% 
+  ggplot(aes(x = pair_id, y = mean_difficulty, group = pair_id)) +
+  geom_point(size = 0.7) +
+  facet_wrap(~ class) +
+  labs(x = "pair id", y = "mean diffiuclty") +
+  theme(axis.text.x = element_text(size = 7))
+```
+
+For each sentence-pair (eight per speaker, so 320 in total) we computed the mean of the 20 ratings given to the sentences in the pair.  We then applied a numerical measure of how "evenly spread out" the eight means are within the range of the minimum and the maximum of all 320 mean ratings.  The figure above shows the difficulties for the ten speaker-pairs whose sentences were "most spread out"  (left) and "least spread out" (right) in terms of their mean difficulties.
+
+If we classify difficulty relative to all sentence-pairs, then for some speaker-pairs (see especially speaker-pair 24 on the right) all or nearly all the sentence-pairs would be classed as difficult.  This could be what you want.  Or it might not be.
+
+If we classify difficulty relative only to the other sentence-pairs in the group, then half of the sentences for speaker-pair 24 would be classed as easy.  Again, this might or might not be what you want.
+
+in the end we may wish to offer two classifications of difficulty:
+
+* difficulty relative to the other sentences in the speaker-pair, and
+* difficulty relative to all sentence-pairs in the Corpus
+
+Let me know what you think.
+
