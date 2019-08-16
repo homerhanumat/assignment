@@ -12,7 +12,7 @@ sentences2 <-
   rename(participant_id = Participant,
          pair_id = Pair,
          sentence_id = Sentence,
-         speaker_id = Accent,
+         speaker_accent = Accent,
          difficulty = Condition,
          rating = Rating) %>% 
   mutate(rating = rating * 100)

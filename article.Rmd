@@ -36,12 +36,12 @@ profile_diff <- function(x, y, trim) {
 
 make_diff_matrix <- function(pair, trim) {
   a <- pair %>% 
-    filter(speaker_id == "Foreign") %>% 
+    filter(speaker_accent == "Foreign") %>% 
     select(ends_with("rating")) %>% 
     t() %>% 
     as.matrix()
   b <- pair %>% 
-    filter(speaker_id == "Native") %>% 
+    filter(speaker_accent == "Native") %>% 
     select(ends_with("rating")) %>% 
     t() %>% 
     as.matrix()
@@ -55,16 +55,16 @@ make_diff_matrix <- function(pair, trim) {
     }
   }
   rownames(mat_statistics) <- pair %>% 
-    filter(speaker_id == "Foreign") %>%
+    filter(speaker_accent == "Foreign") %>%
     pull(sentence_id)
   colnames(mat_statistics) <- pair %>% 
-    filter(speaker_id == "Native") %>%
+    filter(speaker_accent == "Native") %>%
     pull(sentence_id)
   rownames(mat_pvals) <- pair %>% 
-    filter(speaker_id == "Foreign") %>%
+    filter(speaker_accent == "Foreign") %>%
     pull(sentence_id)
   colnames(mat_pvals) <- pair %>% 
-    filter(speaker_id == "Native") %>%
+    filter(speaker_accent == "Native") %>%
     pull(sentence_id)
   list(
     mat_statistics = mat_statistics,
@@ -86,10 +86,10 @@ get_best_demo <- function(pair, size, select, trim, demo) {
   
   ## get sentence ids for each speaker:
   a_sentence_ids <- pair %>% 
-    filter(speaker_id == "Foreign") %>% 
+    filter(speaker_accent == "Foreign") %>% 
     pull(sentence_id)
   b_sentence_ids <- pair %>% 
-    filter(speaker_id == "Native") %>% 
+    filter(speaker_accent == "Native") %>% 
     pull(sentence_id)
   
   ## compute matrices of difference-statisitics and p-values,
@@ -219,7 +219,7 @@ First we download the data.  This can be done manually from the Open Science Fra
 if (!dir.exists("data")) {
   dir.create("data")
 }
-## If possible, change to OSF URL:
+## get the excel file:
 download.file(
   url = "https://github.com/homerhanumat/assignment/raw/master/data/Experiment3.xlsx",
   destfile = "data/Experiment3.xlsx"
@@ -240,15 +240,15 @@ Some data-munging:
 ```{r eval = FALSE}
 sentences <-
   sentences1 %>% 
-  ## pair-id came in as charcter vector, so change to integers:
+  ## pair-id came in as character vector, so change to integers:
   mutate(Pair = as.integer(Pair)) %>% 
   ## ditch mst of the columns:
   select(Participant, Pair, Sentence, Accent, Condition, Rating) %>% 
-  ## rename most of the variables:
+  ## rename most of the variables
   rename(participant_id = Participant,
          pair_id = Pair,
          sentence_id = Sentence,
-         speaker_id = Accent,
+         speaker_accent = Accent,
          difficulty = Condition,
          rating = Rating) %>% 
   ## change rating scale from [-1, 1] to [100, 100]
@@ -348,20 +348,28 @@ profile_diff <- function(x, y, trim) {
   )
 }
 
+## Utility function
+ratings_from_pair <- function(pair) {
+  foreign <- pair %>% 
+    filter(speaker_accent == "Foreign") %>% 
+    select(ends_with("rating")) %>% 
+    t() %>% 
+    as.matrix()
+  native <- pair %>% 
+    filter(speaker_accent == "Native") %>% 
+    select(ends_with("rating")) %>% 
+    t() %>% 
+    as.matrix()
+  list(foreign = foreign, native = native)
+}
+
 ## Utility function to make matrices of statistics and P-values
-## for all pairs of sentences:  one from Speaker A, the other
-## from speaker B.
+## for all pairs of sentences:  one from Speaker A (Foreign), the other
+## from speaker B (Native).
 make_diff_matrix <- function(pair, trim) {
-  a <- pair %>% 
-    filter(speaker_id == "Foreign") %>% 
-    select(ends_with("rating")) %>% 
-    t() %>% 
-    as.matrix()
-  b <- pair %>% 
-    filter(speaker_id == "Native") %>% 
-    select(ends_with("rating")) %>% 
-    t() %>% 
-    as.matrix()
+  ratings <- ratings_from_pair(pair)
+  a <- ratings$foreign
+  b <- ratings$native
   mat_statistics <- matrix(0, nrow = ncol(a), ncol = ncol(b))
   mat_pvals <- matrix(0, nrow = ncol(a), ncol = ncol(b))
   for (i in 1:ncol(a)) {
@@ -372,16 +380,16 @@ make_diff_matrix <- function(pair, trim) {
     }
   }
   rownames(mat_statistics) <- pair %>% 
-    filter(speaker_id == "Foreign") %>%
+    filter(speaker_accent == "Foreign") %>%
     pull(sentence_id)
   colnames(mat_statistics) <- pair %>% 
-    filter(speaker_id == "Native") %>%
+    filter(speaker_accent == "Native") %>%
     pull(sentence_id)
   rownames(mat_pvals) <- pair %>% 
-    filter(speaker_id == "Foreign") %>%
+    filter(speaker_accent == "Foreign") %>%
     pull(sentence_id)
   colnames(mat_pvals) <- pair %>% 
-    filter(speaker_id == "Native") %>%
+    filter(speaker_accent == "Native") %>%
     pull(sentence_id)
   list(
     mat_statistics = mat_statistics,
@@ -400,10 +408,10 @@ get_best <- function(pair, size, select, trim) {
   
   ## get sentence ids for each speaker:
   a_sentence_ids <- pair %>% 
-    filter(speaker_id == "Foreign") %>% 
+    filter(speaker_accent == "Foreign") %>% 
     pull(sentence_id)
   b_sentence_ids <- pair %>% 
-    filter(speaker_id == "Native") %>% 
+    filter(speaker_accent == "Native") %>% 
     pull(sentence_id)
   
   ## compute matrices of difference-statisitics and p-values,
@@ -594,7 +602,7 @@ means_all <-
   mutate(selected = sentence_id %in% selected_sentences) %>% 
   mutate(selected = ifelse(selected, "used in Corpus", "not used")) %>% 
   inner_join(sentences %>%
-               select(sentence_id, speaker_id),
+               select(sentence_id, speaker_accent),
              by = "sentence_id")
 ```
 
@@ -623,7 +631,7 @@ The following boxplot compare the mean difficulty-ratings of senteces spoken by 
 
 ```{r echo = FALSE, fig.cap = "Boxplots of mean ratings for sentences by foreign and natives speakers."}
 means_all %>% 
-  ggplot(aes(x = speaker_id, y = mean_rating)) +
+  ggplot(aes(x = speaker_accent, y = mean_rating)) +
   geom_boxplot(fill = "burlywood", outlier.shape = NA) +
   geom_jitter(width = 0.25, size = 0.3) +
   labs(x = "speaker accent", y = "mean rating")
@@ -634,7 +642,7 @@ There appears to be essentailly no difference in centers of the distributions; s
 
 ```{r echo = FALSE}
 means_all %>% 
-  group_by(speaker_id) %>% 
+  group_by(speaker_accent) %>% 
   summarize(mean = mean(mean_rating), median = median(mean_rating), n = n()) %>% 
   knitr::kable(caption = "Mean and median of mean ratings for sentences, by type of speaker.")
 ```

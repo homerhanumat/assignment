@@ -21,20 +21,28 @@ profile_diff <- function(x, y, trim) {
   )
 }
 
+## Utility function
+ratings_from_pair <- function(pair) {
+  foreign <- pair %>% 
+    filter(speaker_accent == "Foreign") %>% 
+    select(ends_with("rating")) %>% 
+    t() %>% 
+    as.matrix()
+  native <- pair %>% 
+    filter(speaker_accent == "Native") %>% 
+    select(ends_with("rating")) %>% 
+    t() %>% 
+    as.matrix()
+  list(foreign = foreign, native = native)
+}
+
 ## Utility function to make matrices of statistics and P-values
-## for all pairs of sentences:  one from Speaker A, the other
-## from speaker B.
+## for all pairs of sentences:  one from Speaker A (Foreign), the other
+## from speaker B (Native).
 make_diff_matrix <- function(pair, trim) {
-  a <- pair %>% 
-    filter(speaker_id == "Foreign") %>% 
-    select(ends_with("rating")) %>% 
-    t() %>% 
-    as.matrix()
-  b <- pair %>% 
-    filter(speaker_id == "Native") %>% 
-    select(ends_with("rating")) %>% 
-    t() %>% 
-    as.matrix()
+  ratings <- ratings_from_pair(pair)
+  a <- ratings$foreign
+  b <- ratings$native
   mat_statistics <- matrix(0, nrow = ncol(a), ncol = ncol(b))
   mat_pvals <- matrix(0, nrow = ncol(a), ncol = ncol(b))
   for (i in 1:ncol(a)) {
@@ -45,16 +53,16 @@ make_diff_matrix <- function(pair, trim) {
     }
   }
   rownames(mat_statistics) <- pair %>% 
-    filter(speaker_id == "Foreign") %>%
+    filter(speaker_accent == "Foreign") %>%
     pull(sentence_id)
   colnames(mat_statistics) <- pair %>% 
-    filter(speaker_id == "Native") %>%
+    filter(speaker_accent == "Native") %>%
     pull(sentence_id)
   rownames(mat_pvals) <- pair %>% 
-    filter(speaker_id == "Foreign") %>%
+    filter(speaker_accent == "Foreign") %>%
     pull(sentence_id)
   colnames(mat_pvals) <- pair %>% 
-    filter(speaker_id == "Native") %>%
+    filter(speaker_accent == "Native") %>%
     pull(sentence_id)
   list(
     mat_statistics = mat_statistics,
@@ -73,10 +81,10 @@ get_best <- function(pair, size, select, trim) {
   
   ## get sentence ids for each speaker:
   a_sentence_ids <- pair %>% 
-    filter(speaker_id == "Foreign") %>% 
+    filter(speaker_accent == "Foreign") %>% 
     pull(sentence_id)
   b_sentence_ids <- pair %>% 
-    filter(speaker_id == "Native") %>% 
+    filter(speaker_accent == "Native") %>% 
     pull(sentence_id)
   
   ## compute matrices of difference-statisitics and p-values,
@@ -209,7 +217,7 @@ results_df <-
 s2 <- 
   sentences %>% 
   mutate(SentenceRating = rowMeans(select(sentences, ends_with("rating")))) %>% 
-  select(sentence_id, pair_id, speaker_id, SentenceRating) %>% 
+  select(sentence_id, pair_id, speaker_accent, SentenceRating) %>% 
   inner_join(results_df, by = "sentence_id")
 
 match_rating <-
@@ -226,7 +234,7 @@ sentence_info <-
   arrange(pair_id, MatchingRating) %>% 
   mutate(Difficulty = rep(rep(c("Easy", "Difficult"), each = 8), times = 40)) %>% 
   select(-paired_with) %>% 
-  rename(Sentence = sentence_id, Pair = pair_id, Accent = speaker_id)
+  rename(Sentence = sentence_id, Pair = pair_id, Accent = speaker_accent)
 
 readr::write_csv(sentence_info, path = "data/sentence_info.csv")
 
