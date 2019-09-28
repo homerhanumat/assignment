@@ -77,7 +77,7 @@ make_diff_matrix <- function(pair, trim) {
 ## to find the best matching set of sentences from Speaker B.
 ## Keeps track of the best matching.
 ## Returns a data frame of results.
-get_best <- function(pair, size, select, trim) {
+get_best <- function(pair, select, trim) {
   
   ## get sentence ids for each speaker:
   a_sentence_ids <- pair %>% 
@@ -93,6 +93,7 @@ get_best <- function(pair, size, select, trim) {
   
   ## make all possible subsets of cardinality select from
   ## the sentences for A-speker
+  size <- nrow(diff_mats[[1]])
   a_subsets_numeric <- utils::combn(x = size, m = select)
   
   ## prepare to loop through all A-speaker subsets
@@ -153,7 +154,6 @@ get_best <- function(pair, size, select, trim) {
 
 ## This is the function you'll actually use.
 ## data is the original data frame
-## size = number of sentences eer speaker
 ## select = desired number of sentence-pairs
 ##
 ## trim is there in case researchers desire to omit
@@ -177,7 +177,7 @@ match_sentences <- function(data, size, select, trim = 0, trace = FALSE) {
     }
     pair <- data %>% 
       filter(pair_id == pair_ids[i])
-    results <-  get_best(pair, size, select, trim)
+    results <-  get_best(pair, select, trim)
     lst[[i]] <- results
   }
   names(lst) <- pair_ids
@@ -188,7 +188,6 @@ match_sentences <- function(data, size, select, trim = 0, trace = FALSE) {
 
 results <- match_sentences(
   data = sentences,
-  size = 12,
   select = 8,
   trim = 0,  ## the default, actually,
   trace = FALSE
@@ -258,3 +257,14 @@ readr::write_csv(
   selected_sentences_frame, 
   path = "data/selected_sentences_frame.csv"
 )
+
+sentence_info_correct3 <-
+  sentence_info %>% 
+  filter(Pair %in% c(14, 33, 45))
+readr::write_csv(
+  sentence_info_correct3, 
+  path = "data/sentence_info_correct3.csv"
+)
+
+
+

@@ -266,8 +266,16 @@ names(sentences)[5:14] <- paste("participant", 1:10, "rating", sep = "_")
 sentences <-
   sentences %>% 
   arrange(pair_id)
-```
 
+## Duplicate suentences, discovered by Bailey McGuffey:
+## Eliminate the repeated sentences 14F4, 33N3, and 45N7 
+## from the dataset:
+
+bad_ids <- c("14AE3", "33BE5", "45BD11")
+sentences <-
+  sentences %>% 
+  filter(!(sentence_id %in% bad_ids))
+```
 
 
 Here is the transformed data:
@@ -281,6 +289,8 @@ rmarkdown::paged_table(sentences)
 
 ### The Idea of the Routine
 
+For almost every speaker-pair, we had access to twelve sentences from each speaker in the pair. (Three sentences had to be removed from the original data, resulting in three instances in which a speaker had only eleven sentences.)
+
 For each speaker-pair, we wish to desire to find a set of eight sentences from the Foreign speaker and to match them one-to-one with the members of a set of eight sentences from the Native speaker, in such a way that the resulting matched sentences are as similar as possible in terms of their difficulty-ratings as given by the ten subjects who heard the sentences of both speakers.
 
 As a criterion for similarity of difficulty of two given sentences, we use the absolute value of the t-statistic in a paired t-test involving the ten ratings for each sentence.  As a measure of overall similarity in a proposed matching, we use the sum of the eight absolute values.  The smaller this sum, the more "similar" we deem the matching to be.
@@ -293,7 +303,9 @@ knitr::kable(demo_matrix)
 
 The row-names of the above matrix are sentence-IDs for the Foreign speaker; the column names are IDs of the sentences spoken by the Native speaker.  Each cell is the absolute value of the paired t-test applied to a sentence-pair.  Thus, for example, in a paired t-test for sentences `r rownames(demo_matrix)[1]` and  `r colnames(demo_matrix)[1]` the absolute value of the t-test statistic was about `r demo_matrix[1, 1]`.
 
-Our task is find a set of eight rows and a set of eight columns and a matching between them so as to make the sum of the corresponding eight cells as small as possible.
+(As is the case for most of the speakers, the matrix is 12-by-12 since we had twelve sentences from each speaker.  However, for three speaker-pairs one of the speakers was missing a sentence and so the corresponding matrix was either 11-by-12 or 12-by-11.)
+
+In any event, our task is find a set of eight rows and a set of eight columns and a matching between them so as to make the sum of the corresponding eight cells as small as possible.
 
 For the matrix above, the best choice turns out to be as follows:
 
@@ -404,7 +416,7 @@ make_diff_matrix <- function(pair, trim) {
 ## to find the best matching set of sentences from Speaker B.
 ## Keeps track of the best matching.
 ## Returns a data frame of results.
-get_best <- function(pair, size, select, trim) {
+get_best <- function(pair, select, trim) {
   
   ## get sentence ids for each speaker:
   a_sentence_ids <- pair %>% 
@@ -420,6 +432,7 @@ get_best <- function(pair, size, select, trim) {
   
   ## make all possible subsets of cardinality select from
   ## the sentences for A-speker
+  size <- nrow(diff_mats[[1]])
   a_subsets_numeric <- utils::combn(x = size, m = select)
   
   ## prepare to loop through all A-speaker subsets
@@ -479,14 +492,12 @@ get_best <- function(pair, size, select, trim) {
 ## match_sentences ----
 
 ## This is the function you'll actually use.
-##
-## data  = the original data frame
-## size = number of sentences eer speaker
+## data is the original data frame
 ## select = desired number of sentence-pairs
 ##
-## trim permites researchers to omit very high or low
-## ratings from the analysis.  (Example:  setting trim = 0.1 would
-## eliminate the highest and the lowest of the ten differences in ratings.)
+## trim is there in case researchers desire to omit
+## very high or low ratings.  (Setting trim = 0.1 would knock out
+## the highest and the lowest of the ten differences in ratings.)
 ##
 ## Setting trace to TRUE results in a progress report to the console
 ## (not needed for the current small study)
@@ -495,8 +506,7 @@ get_best <- function(pair, size, select, trim) {
 ## saying which sentence goes to which, and reporting the P-values
 ## of the Yuen T-Test.  This allows the user to flag pairs where the
 ## ratings are "too different".
-##
-match_sentences <- function(data, size, select, trim = 0, trace = FALSE) {
+match_sentences <- function(data, select, trim = 0, trace = FALSE) {
   pair_ids <- sort(unique(data$pair_id))
   pairs <- length(unique(data$pair_id))
   lst <- vector(mode = "list", length = pairs)
@@ -506,7 +516,7 @@ match_sentences <- function(data, size, select, trim = 0, trace = FALSE) {
     }
     pair <- data %>% 
       filter(pair_id == pair_ids[i])
-    results <-  get_best(pair, size, select, trim)
+    results <-  get_best(pair, select, trim)
     lst[[i]] <- results
   }
   names(lst) <- pair_ids
@@ -522,7 +532,6 @@ Now we run the algorithm, using `system.time() to record how long it takes:
 system.time(
   results <- match_sentences(
     data = sentences,
-    size = 12,
     select = 8,
     trim = 0,  ## the default, actually,
     trace = FALSE
@@ -606,15 +615,15 @@ means_all <-
              by = "sentence_id")
 ```
 
-Here is density plot of all 9600 individual difficulty-ratings:
+We worked with 957 sentences, each of which were rated by ten study-participants.  Here is density plot of all 9570 individual difficulty-ratings:
 
-```{r echo = FALSE, fig.cap = "Density plot of all 9600 difficulty-ratings recorded in the study."}
+```{r echo = FALSE, fig.cap = "Density plot of all 9570 difficulty-ratings recorded in the study."}
 s2 %>% 
   ggplot(aes(x = rating)) +
   geom_density(fill = "burlywood")
 ```
 
-Next we see a violin plot of mean difficulty-ratings.  Each dot is a single sentence; its vertical height is the mean of the ratings for the ten participants who rated it.  We have separated the sentences into the 320 that were not selected as members of an optimal matching and the 640 setences that were selected.
+Next we see a violin plot of mean difficulty-ratings.  Each dot is a single sentence; its vertical height is the mean of the ratings for the ten participants who rated it.  We have separated the sentences into the 317 that were not selected as members of an optimal matching and the 640 setences that were selected.
 
 ```{r echo = FALSE, fig.cap = "Violin plot of mean difficulty ratings, by status of sentence (selected for Corpus vs. not selected)."}
 means_all %>% 
@@ -627,7 +636,7 @@ means_all %>%
 
 The sentences that were not selected vary a bit more in mean difficulty than sentences that were selected.  This makes sense, for when a sentence is of unusually high or low difficulty there is less likelihood of finding---among the sentences of the other speaker in the speaker-pair---a sentence similar to it in difficulty.
 
-The following boxplot compare the mean difficulty-ratings of senteces spoken by foreign anf native speakers, including those sentences that were not selected as members of an optimal pairing:
+The following boxplots compare the mean difficulty-ratings of senteces spoken by foreign anf native speakers, including those sentences that were not selected as members of an optimal pairing:
 
 ```{r echo = FALSE, fig.cap = "Boxplots of mean ratings for sentences by foreign and natives speakers."}
 means_all %>% 

@@ -1,5 +1,5 @@
 ##########################################
-## import the data from excel
+## import the data from excel ----
 ##########################################
 
 sentences <- readr::read_csv("data/Experiment3.csv")
@@ -35,5 +35,22 @@ sentences <-
   sentences_real %>% 
   arrange(pair_id)
 
+######################################################
+## delete erroneous observations ----
+#####################################################
+
+## duplicate suentences, discovered by Bailey McGuffey:
+## Eliminate the repeated sentences 14F4, 33N3, and 45N7 
+## from the dataset.
+
+bad_ids <- c("14AE3", "33BE5", "45BD11")
+sentences <-
+  sentences %>% 
+  filter(!(sentence_id %in% bad_ids))
+
+
+#######################################################
+## save results ----
+######################################################
 
 save(sentences, file = "data/sentences.Rda")
