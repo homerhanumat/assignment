@@ -182,7 +182,7 @@ for (i in 1:12) {
 
 ## Introduction
 
-The Bluegrass Corpus includes a set of 40 pairs of TED-talk speakers who are similar in many respects but who differ in whether or not their accent is deemed "foreign" or "native". Each speaker has eight video clips in which he or she is speaking a sentence.  All sixteen sentences associated with a particular pair of speakers were rated for difficulty by ten participants. The two sets of eight sentences are matched one-to-one, resulting in eight pairs of sentences.  The matching has been done in such as way as to make the mean rated difficulty of the sentences in each pair as similar as possible.  In keeping with the ideals of reproducible research, the aim of this technical report is to describe the matching procedure in such a way that other researchers can assess the quality of the procedure and use the procedure to reproduce the matching.
+The Bluegrass Corpus includes a set of 40 pairs of TED-talk speakers who are similar in many respects but who differ in whether or not their accent is deemed "foreign" or "native". Each speaker has eight video clips in which he or she is speaking a sentence.  All 24 sentences associated with a particular pair of speakers were rated for difficulty by ten participants. The two sets of eight sentences are matched one-to-one, resulting in eight pairs of sentences.  The matching has been done in such as way as to make the mean rated difficulty of the sentences in each pair as similar as possible.  In keeping with the ideals of reproducible research, the aim of this technical report is to describe the matching procedure in such a way that other researchers can assess the quality of the procedure and use the procedure to reproduce the matching.
 
 The procedure is implemented in the R programming language @R2019.  There are two ways for R-users to reproduce the matching:
 
@@ -623,7 +623,7 @@ s2 %>%
   geom_density(fill = "burlywood")
 ```
 
-Next we see a violin plot of mean difficulty-ratings.  Each dot is a single sentence; its vertical height is the mean of the ratings for the ten participants who rated it.  We have separated the sentences into the 317 that were not selected as members of an optimal matching and the 640 setences that were selected.
+Next we see a violin plot of mean difficulty-ratings.  Each dot is a single sentence; its vertical height is the mean of the ratings for the ten participants who rated it.  We have separated the sentences into the 317 that were not selected as members of an optimal matching and the 640 sentences that were selected.
 
 ```{r echo = FALSE, fig.cap = "Violin plot of mean difficulty ratings, by status of sentence (selected for Corpus vs. not selected)."}
 means_all %>% 
@@ -636,7 +636,7 @@ means_all %>%
 
 The sentences that were not selected vary a bit more in mean difficulty than sentences that were selected.  This makes sense, for when a sentence is of unusually high or low difficulty there is less likelihood of finding---among the sentences of the other speaker in the speaker-pair---a sentence similar to it in difficulty.
 
-The following boxplots compare the mean difficulty-ratings of senteces spoken by foreign anf native speakers, including those sentences that were not selected as members of an optimal pairing:
+The following box plots compare the mean difficulty-ratings of sentences spoken by foreign and native speakers, including those sentences that were not selected as members of an optimal pairing:
 
 ```{r echo = FALSE, fig.cap = "Boxplots of mean ratings for sentences by foreign and natives speakers."}
 means_all %>% 
@@ -646,7 +646,7 @@ means_all %>%
   labs(x = "speaker accent", y = "mean rating")
 ```
 
-There appears to be essentailly no difference in centers of the distributions; see also the following table:
+There appears to be essentially no difference in centers of the distributions; see also the following table:
 
 
 ```{r echo = FALSE}
