@@ -266,5 +266,12 @@ readr::write_csv(
   path = "data/sentence_info_correct3.csv"
 )
 
+sentence_info_correct4 <-
+  sentence_info %>% 
+  filter(Pair %in% c(33))
+readr::write_csv(
+  sentence_info_correct4, 
+  path = "data/sentence_info_correct4.csv"
+)
 
 

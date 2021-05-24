@@ -182,7 +182,7 @@ for (i in 1:12) {
 
 ## Introduction
 
-The Bluegrass Corpus includes a set of 40 pairs of TED-talk speakers who are similar in many respects but who differ in whether or not their accent is deemed "foreign" or "native". Each speaker has eight video clips in which he or she is speaking a sentence.  All 24 sentences associated with a particular pair of speakers were rated for difficulty by ten participants. The two sets of eight sentences are matched one-to-one, resulting in eight pairs of sentences.  The matching has been done in such as way as to make the mean rated difficulty of the sentences in each pair as similar as possible.  In keeping with the ideals of reproducible research, the aim of this technical report is to describe the matching procedure in such a way that other researchers can assess the quality of the procedure and use the procedure to reproduce the matching.
+The Bluegrass Corpus includes a set of 40 pairs of TED-talk speakers who are similar in many respects but who differ in whether or not their accent is deemed "foreign" or "native". Each speaker has twelve video clips in which he or she is speaking a sentence.  All 24 sentences associated with a particular pair of speakers were rated for difficulty by ten participants. For each speaker-pair we chose eight sentences from each speaker and matched them with each other---a sentence from the "native" speaker to a sentence from the "foreign" speakers---in such a way that the mean rated difficulties of the sentences in each pair are as similar as possible.  In keeping with the ideals of reproducible research, this technical report aims to describe the matching procedure precisely, so that other researchers can assess the quality of the procedure and can use the procedure to reproduce the matching.
 
 The procedure is implemented in the R programming language @R2019.  There are two ways for R-users to reproduce the matching:
 
@@ -242,7 +242,7 @@ sentences <-
   sentences1 %>% 
   ## pair-id came in as character vector, so change to integers:
   mutate(Pair = as.integer(Pair)) %>% 
-  ## ditch mst of the columns:
+  ## ditch most of the columns:
   select(Participant, Pair, Sentence, Accent, Condition, Rating) %>% 
   ## rename most of the variables
   rename(participant_id = Participant,
@@ -253,7 +253,7 @@ sentences <-
          rating = Rating) %>% 
   ## change rating scale from [-1, 1] to [100, 100]
   mutate(rating = rating * 100) %>% 
-  ## reshape data so that each repreents a single sentence:
+  ## reshape data so that each row repreents a single sentence:
   arrange(sentence_id) %>% 
   mutate(participant = rep(1:10, times = 960)) %>% 
   select(-participant_id) %>% 
@@ -268,10 +268,10 @@ sentences <-
   arrange(pair_id)
 
 ## Duplicate suentences, discovered by Bailey McGuffey:
-## Eliminate the repeated sentences 14F4, 33N3, and 45N7 
+## Eliminate the repeated sentences 
 ## from the dataset:
 
-bad_ids <- c("14AE3", "33BE5", "45BD11")
+bad_ids <- c("14AE3", "33BE5", "45BD11", "33BE4", "33BD9")
 sentences <-
   sentences %>% 
   filter(!(sentence_id %in% bad_ids))
@@ -303,7 +303,7 @@ knitr::kable(demo_matrix)
 
 The row-names of the above matrix are sentence-IDs for the Foreign speaker; the column names are IDs of the sentences spoken by the Native speaker.  Each cell is the absolute value of the paired t-test applied to a sentence-pair.  Thus, for example, in a paired t-test for sentences `r rownames(demo_matrix)[1]` and  `r colnames(demo_matrix)[1]` the absolute value of the t-test statistic was about `r demo_matrix[1, 1]`.
 
-(As is the case for most of the speakers, the matrix is 12-by-12 since we had twelve sentences from each speaker.  However, for three speaker-pairs one of the speakers was missing a sentence and so the corresponding matrix was either 11-by-12 or 12-by-11.)
+(As is the case for most of the speakers, the matrix is 12-by-12 since we had twelve sentences from each speaker.  However, three of the speaker-pairs had misssing sentences from one of the speakers; for these pairs the matrix was correspondingly smaller.)
 
 In any event, our task is find a set of eight rows and a set of eight columns and a matching between them so as to make the sum of the corresponding eight cells as small as possible.
 
@@ -615,15 +615,15 @@ means_all <-
              by = "sentence_id")
 ```
 
-We worked with 957 sentences, each of which were rated by ten study-participants.  Here is density plot of all 9570 individual difficulty-ratings:
+We worked with 955 sentences, each of which were rated by ten study-participants.  Here is density plot of all 9550 individual difficulty-ratings:
 
-```{r echo = FALSE, fig.cap = "Density plot of all 9570 difficulty-ratings recorded in the study."}
+```{r echo = FALSE, fig.cap = "Density plot of all 9550 difficulty-ratings recorded in the study."}
 s2 %>% 
   ggplot(aes(x = rating)) +
   geom_density(fill = "burlywood")
 ```
 
-Next we see a violin plot of mean difficulty-ratings.  Each dot is a single sentence; its vertical height is the mean of the ratings for the ten participants who rated it.  We have separated the sentences into the 317 that were not selected as members of an optimal matching and the 640 sentences that were selected.
+Next we see a violin plot of mean difficulty-ratings.  Each dot is a single sentence; its vertical height is the mean of the ratings for the ten participants who rated it.  We have separated the sentences into the 315 that were not selected as members of an optimal matching and the 640 sentences that were selected.
 
 ```{r echo = FALSE, fig.cap = "Violin plot of mean difficulty ratings, by status of sentence (selected for Corpus vs. not selected)."}
 means_all %>% 

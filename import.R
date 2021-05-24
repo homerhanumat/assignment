@@ -40,10 +40,10 @@ sentences <-
 #####################################################
 
 ## duplicate suentences, discovered by Bailey McGuffey:
-## Eliminate the repeated sentences 14F4, 33N3, and 45N7 
+## Eliminate the repeated following sentences 
 ## from the dataset.
 
-bad_ids <- c("14AE3", "33BE5", "45BD11")
+bad_ids <- c("14AE3", "33BE5", "45BD11", "33BE4", "33BD9")
 sentences <-
   sentences %>% 
   filter(!(sentence_id %in% bad_ids))
